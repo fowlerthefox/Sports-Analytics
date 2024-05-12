@@ -1,0 +1,267 @@
+---
+title: "Inter-rater reliability for GAA Coding App"
+author: "CSheelan"
+date: "2023-10-18"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(expm)
+library(tidyverse)
+library(lubridate)
+library(janitor)
+library(readxl)
+library(kableExtra)
+library(formattable)
+library(purrr)
+library(markovchain)
+library(gplots)
+library(RColorBrewer)
+library(reshape2)
+library(irr)
+library(webshot)
+```
+
+## Statistical Analysis 
+### GAA Match: Dublin vs Kerry All-Ireland Final 2023 (1st half)
+
+This document presents a comparative analysis of football match data that has been manually coded by three different individuals. The objective is to determine if there are any statistically significant differences between the coding performed by these individuals. The data sets include information on various aspects of the match, such as team attacks, zones, actions, outcomes, shot pressure, and timestamps.
+<br>
+The analysis involves data wrangling, statistical tests, and visualizations to assess the level of agreement or disagreement between the three sets of coded data. The results will provide insights into the consistency and reliability of the coding process and identify any potential areas of divergence.
+
+By comparing and contrasting the coding results, this document aims to contribute to the evaluation and quality assurance of manually coded data in the context of match analysis.
+
+<br>
+
+### Read in data
+```{r read in files}
+match_cs <- read_excel('Data test/match_file_005_dublin_vs_kerry_final_2023_1st_half.xls') %>%
+  mutate(coder = 'cs')
+match_j <- read_excel('Data test/match_file_005_dublin_vs_kerry_final_2023_1st_half_jack.xls') %>%
+  mutate(coder = 'j')
+match_k <- read_excel('Data test/match_file_005_dublin_vs_kerry_final_2023_1st_half_kevin.xlsx') %>%
+  select(-1,-10,-11, timestamp = Origtimestamp) %>%
+  mutate(coder = 'k')
+
+comparison_data <- rbind(match_cs,match_j,match_k)
+```
+
+### Comparing Scored Shots and Zones by Coder
+``` {r Shots & Zones Comparison by Coder}
+
+# Filter data for instances where outcome is 'point' or 'goal'
+shot_score_data <- comparison_data %>%
+  filter(outcome %in% c('Point','Goal'))
+
+# Create a bar chart to compare scored shots by zone & coder
+p <- ggplot(shot_score_data, aes(y = zone, x = after_stat(count), fill = action)) +
+  geom_bar(position = "dodge", stat="count") +
+  facet_wrap(~coder) +  # creates separate panels for each coder
+  labs(title = "Count of 'Shot Point' and 'Shot Goal' Actions by Zone and by Coder")
+
+# Change x-axis scale to whole numbers
+p <- p + scale_x_continuous(breaks = seq(0, 3, by = 1))  # Adjust the range if necessary
+
+p
+```
+Overall Observations:
+Zones 8 and 12 consistently have higher counts of 'Shot Point' actions across all three coders. This may suggest these zones are more favorable or common for taking shots.
+
+There are inconsistencies in the 'Shot Goal' actions across coders, indicating potential discrepancies in the way each coder recorded or interpreted these actions.
+
+The presence of the 'Kickout' action in the chart indicates potential error.
+
+In conclusion, the observed variance in the data seems to strike a balance between uniformity and individual interpretation, which is typical of high-quality observational data. While it's essential to continue with regular data validation checks, the current state of the dataset appears promising in terms of accuracy and quality.
+
+### Shots by Shot Pressure & Coder
+``` {r Shots by Shot Pressure & Coder}
+# Filter data for instances where action is 'shot point'
+shot_point_data <- comparison_data %>% 
+  filter(action %in% c('Shot Point','Shot Goal'))
+
+# plot ther number shot pressures by action and coder
+ggplot(shot_point_data, aes(x = action, fill = coder)) +
+  geom_bar(position = "dodge") +
+  facet_wrap(~shot_pressure) +
+  labs(title = "Shot Pressure for Shots by Coder",
+       x = "Action",
+       y = "Count",
+       fill = "Coder")
+
+```
+
+Observations:
+Variance in Pressure Reporting: Different coders perceive shot pressures differently. For instance, coder "cs" tends to report more "Medium" pressures, while coder "j" has a balanced distribution for "Shot Goal" but leans towards "Low" for "Shot Point."
+
+Missing Data: Only coder "k" seems to have instances where shot pressures are not available ("NA"). This could be due to missed entries, or it might be intentional if, for some reason, pressure was deemed unclassifiable.
+
+Consistency within Coders: Each coder seems to have a pattern. For example, coder "cs" predominantly uses "Medium" pressure for both types of shots. However, coder "j" has a tendency to report "Low" pressure for "Shot Point."
+
+Action Differences: The distribution of pressures also varies based on the action type. "Shot Goal" and "Shot Point" don't always have the same pressure distribution even within the same coder.
+
+Implications:
+This variance highlights the subjective nature of manually coding shot pressures. Different coders have different perspectives, and even the same coder may evaluate the same scenario differently based on the specific action. To enhance consistency, it might be helpful to provide coders with clearer guidelines or criteria for assigning shot pressures. Alternatively, this could point to the need for more training or calibration sessions where coders discuss and align on how to categorize different pressures.
+
+
+### Comparing Zones
+``` {r Comparing Zones}
+# Create a data frame for comparison for zones
+comparison_data_zones <- bind_rows(
+  data.frame(dataset = "match_cs", zone = match_cs$zone),
+  data.frame(dataset = "match_j", zone = match_j$zone),
+  data.frame(dataset = "match_k", zone = match_k$zone)
+)
+
+comparison_data_zones$zone <- factor(comparison_data_zones$zone)
+
+# Create a bar chart for the zones 
+bar_chart_zone <- ggplot(comparison_data_zones, aes(x = dataset, fill = zone, group = zone)) +
+  geom_bar() +
+  labs(title = "Zone Comparison",
+       x = "Dataset",
+       y = "Count") +
+  theme_minimal()
+
+# Display the bar chart
+print(bar_chart_zone)
+```
+
+Uniform Distribution: At a first glance, the distribution of counts across zones appears consistent among the three coders. This uniformity indicates that all coders observed and categorized events similarly across the zones, suggesting a strong level of agreement among them.
+
+It seems zones 1 and 2 (represented by the top two bands) consistently have the highest counts across all coders, indicating these zones had the most activity or events. Conversely, zones 14, 15, and 16 (bottom bands) have the lowest counts, suggesting fewer events in these areas.
+
+Total Counts: The overall height of each bar appears similar, suggesting that each coder recorded roughly the same total number of events. This again emphasizes consistency in the data collection process.
+
+The consistency observed among the coders suggests a high degree of reliability in the data collection process for zones.
+
+### Zone Counts Table
+``` {r Zone Counts Table}
+# Create a data frame with counts of zones for each dataset
+zone_counts <- comparison_data_zones %>%
+  group_by(dataset, zone) %>%
+  summarize(count = n()) %>%
+  pivot_wider(names_from = dataset, values_from = count, values_fill = 0)
+
+# Create a table using kable
+zone_table <- zone_counts %>%
+  kable(format = "html") %>%
+  kable_styling(full_width = FALSE)
+
+# Display the table
+zone_table
+
+```
+
+
+### Chi-Square test for Zone across datasets
+``` {r Chi-Square test for Zone across datasets}
+# Perform a chi-squared test
+chisq_result_zone <- chisq.test(comparison_data_zones$zone, comparison_data_zones$dataset)
+
+# Print the chi-squared test results
+chisq_result_zone
+```
+The p-value is extremely high (1), which means there is no evidence to suggest a significant association between the variables zone and dataset. This suggests that, based on the Chi-squared test, there is no statistically significant relationship or dependency between the zones and the datasets in your analysis.
+
+In practical terms, it implies that the distribution of zones is similar across the different datasets, and any differences observed are likely due to random chance rather than a meaningful association.
+
+### Comparing Actions
+``` {r Comparing Actions}
+
+comparison_data_action <- bind_rows(
+  data.frame(dataset = "match_cs", action = match_cs$action),
+  data.frame(dataset = "match_j", action = match_j$action),
+  data.frame(dataset = "match_k", action = match_k$action)
+)
+
+# Create a bar chart for the zones 
+bar_chart_action <- ggplot(comparison_data_action, aes(x = dataset, fill = action, group = action)) +
+  geom_bar() +
+  labs(title = "Action Comparison",
+       x = "Dataset",
+       y = "Count") +
+  theme_minimal()
+
+# Display the bar chart
+print(bar_chart_action)
+```
+
+### Actions Counts Table
+``` {r Action Counts Table}
+# Create a data frame with counts of zones for each dataset
+action_counts <- comparison_data_action %>%
+  group_by(dataset, action) %>%
+  summarize(count = n()) %>%
+  pivot_wider(names_from = dataset, values_from = count, values_fill = 0)
+
+# Create a table using kable
+action_table <- action_counts %>%
+  kable(format = "html") %>%
+  kable_styling(full_width = FALSE)
+
+# Display the table
+action_table
+```
+
+
+Action distribution across the coders looks good apart from the actions; TOs, Move Ball & Hand Pass 
+
+
+### Fisher Exact Test Actions across Datasets
+``` {r Fisher Exact Test Actions}
+# Perform Fisher's Exact Test
+fisher_result_action <- fisher.test(table(comparison_data_action$action, comparison_data_action$dataset), simulate.p.value = TRUE)
+
+# Print the results
+fisher_result_action
+```
+The Fisher's Exact Test with a simulated p-value for count data indicates the following results:
+
+The p-value is approximately 0.9755.
+The alternative hypothesis is two-sided.
+With a p-value of 0.9755, we do not have evidence to reject the null hypothesis. This suggests that there is no significant association between the categorical variable "action" and the "dataset." In other words, the distribution of actions across the three datasets is not significantly different, and any observed differences are likely due to random chance.
+
+The two-sided alternative hypothesis indicates that the test considered differences in both directions (i.e., actions being more or less frequent in one dataset compared to another), but none of these differences were found to be statistically significant based on the obtained p-value.
+
+Overall, the analysis suggests that the categorical variable "action" does not show a significant difference among the three datasets.
+
+### Timestamp analysis on Shots
+``` {r Timestamp analysis on Shots}
+shot_score_data_time_no_k <- shot_score_data %>%
+  filter(coder != 'k') %>% #filter out code k as timestamp data not comparable
+  group_by(coder) %>%
+  arrange(timestamp) %>%
+  mutate(shot_id = row_number()) %>%
+  ungroup()
+
+
+ggplot(shot_score_data_time_no_k, aes(x = timestamp, y = coder, color = coder)) +
+  geom_point() +
+  labs(title = "Scatter Plot of Shots Timestamps for Each Coder")
+
+
+```
+
+Plot indicates similar pattern in timestmaps for coded shots that the outcome was a point
+
+### Difference in timestamps between coders
+``` {r Timestamp analysis on Shots 2}
+difference_df <- shot_score_data_time_no_k %>%
+  select(shot_id, coder, timestamp) %>%
+  spread(key = coder, value = timestamp) %>%
+  mutate(timestamp_difference = abs(cs - j))
+
+mean(difference_df$timestamp_difference)
+
+ggplot(difference_df, aes(y = timestamp_difference)) +
+  geom_boxplot(fill = "steelblue", color = "black") +
+  labs(title = "Boxplot of Timestamp Differences", 
+       y = "Timestamp Difference (seconds)")
+
+```
+
+#### Overall Interpretation:
+The differences between the two coders' timestamps are generally small and centered around zero, indicating a good agreement between the coders. The majority of the differences are within a consistent range, suggesting reliability and consistency in the coding process. There are no major outliers, which means there aren't many extreme discrepancies between the two coders' timestamps.

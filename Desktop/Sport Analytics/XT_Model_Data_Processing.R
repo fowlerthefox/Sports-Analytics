@@ -22,7 +22,7 @@ library(RColorBrewer)
 pattern <- "^match_file"
 
 # List all .xlsx files in the current directory that start with the pattern
-files <- list.files(pattern = paste0(pattern, ".*\\.xls$"))
+files <- list.files(path = "data", pattern = paste0(pattern, ".*\\.xls$"), full.names = TRUE)
 
 # list of actions that are not possession ending
 not_ending_action = c('Free','Kickout','Hand Pass','Carry','Kick Pass','Sideline','Free 45','Stop')
@@ -423,7 +423,9 @@ while (max_diff > tolerance) {
 }
 
 
-rm(shot_score_to, shots)
+rm(shot_score_to, shots, additional_states, i, j, m_z, max_diff, max_transitions,
+   n_states, n_zones, not_ending_action, pos_end_action, pos_end_outcome,
+   S, z, xT_old, tolerance, scoring_probabilities)
 
 # Model Validation & Analysis
 
@@ -481,6 +483,10 @@ ggplot(scores_and_expected, aes(x = score, y = expected_threat_value)) +
        x = "Score",
        y = "Expected Threat Value") +
   theme_minimal() 
+
+
+
+
 
 
 
