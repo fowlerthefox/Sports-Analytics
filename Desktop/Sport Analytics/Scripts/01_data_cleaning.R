@@ -117,12 +117,12 @@ all_match_data <- all_match_data %>%
            previous_zone %in% c(6, 9, 12, 15) & zone == previous_zone + 1 ~ "right",
            previous_zone %in% c(6, 9, 12, 15) & zone > previous_zone + 2 ~ "forwards",
            previous_zone %in% c(6, 9, 12, 15) & zone < previous_zone - 2 ~ "backwards",
-           # for zones 5, 8, 11, 14
+           # for zones 7, 10, 13, 14
            previous_zone %in% c(7, 10, 13) & zone == previous_zone - 1 ~ "left",
            previous_zone %in% c(7, 10, 13) & zone == previous_zone - 2 ~ "left",
            previous_zone %in% c(7, 10, 13, 14) & zone > previous_zone ~ "forwards",
            previous_zone %in% c(7, 10, 13, 14) & zone < previous_zone - 2 ~ "backwards",
-           # for zone 15, 16
+           # for zone 16
            previous_zone == 16 & zone < previous_zone ~ "backwards",
            # same zone
            previous_zone == zone ~ "same",

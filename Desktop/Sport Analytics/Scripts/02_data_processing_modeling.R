@@ -34,8 +34,7 @@ zone_score <- all_match_data %>%
 
 # TOs per zone
 zone_TO <- all_match_data %>%
-  filter(outcome == 'TO') %>%
-  filter(!action %in% c('Shot Point','Shot Goal')) %>% # filter out shots that outcome was a TO
+  filter(outcome == 'TO' & !action %in% c('Shot Point', 'Shot Goal')) %>%
   group_by(zone) %>%
   summarise(TO = sum(if_else(outcome == 'TO', 1, 0)))
 
@@ -65,34 +64,36 @@ turnover_probabilities <- zone_actions_shots_TO$Prob_TO
 
 
 # transition matrix ####
-
+match_file_zone_prob_matrix <- match_file_zone_prob %>%
+  filter(!outcome == 'TO' | is.na(outcome))
+  
 # Number of zones plus two for the scoring and turnover states
-n_zones <- max(match_file_zone_prob$zone) 
+n_zones <- max(match_file_zone_prob_matrix$zone) 
 additional_states = 2
 n_states = n_zones + additional_states 
 
 # Initialize the transition matrix with zeros
-transition_matrix <- matrix(0, nrow = 16, ncol = 16)
+transition_matrix <- matrix(0, nrow = n_states, ncol = n_states)
 
 # Populate the transition matrix
 for (i in 1:n_zones) {
   for (j in 1:n_zones) {
     # Calculate the probability of moving from zone i to zone j
-    transition_matrix[i, j] <- nrow(filter(match_file_zone_prob, 
+    transition_matrix[i, j] <- nrow(filter(match_file_zone_prob_matrix, 
                                            previous_zone == i, 
-                                           zone == j)) / nrow(filter(match_file_zone_prob, previous_zone == i))
+                                           zone == j)) / nrow(filter(match_file_zone_prob_matrix, previous_zone == i))
   }
 }
 
 
 # Normalize rows to ensure they sum to 1, accounting for scoring and turnovers
-transition_matrix <- sweep(transition_matrix, 1, rowSums(transition_matrix), FUN="/")
+transition_matrix <- sweep(transition_matrix, 1, pmax(rowSums(transition_matrix), 1e-10), FUN="/")
 
 
 # Model Equation ####
 max_transitions <- 20  # maximum number of iterations
-TO <- turnover_probabilities
-S <- shooting_probabilities
+S <- shooting_probabilities[1:n_zones]
+TO <- turnover_probabilities[1:n_zones]
 
 # expected score values adpated from other research
 xG <- c(0, 0, 0, 0, 0.282608696, 0.418604651, 0.282608696, 0.405144695,

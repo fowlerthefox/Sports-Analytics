@@ -113,11 +113,68 @@ ggplot(zone_TO_shots, aes(x = factor(zone), y = perc, fill = perc)) +
         legend.position = "bottom") + 
   geom_text(aes(label = round(perc, 2)), vjust = -0.5, position = position_dodge(0.9), size = 3)
 
-rm(zone_TO, shot_score_to, to_zone_leads_to_shot, next_to_possession, 
+rm(shot_score_to, to_zone_leads_to_shot, next_to_possession, 
    to_possession, next_to_possession_score)
 
 
-# Expected Threat analysis
+# Expected Threat analysis ####
+
+# Create a data frame with zones and their coordinates
+zones <- data.frame(
+  Zone = 1:16,
+  x = c(1, 1, 1, 1, 
+        0, 1, 2, 
+        0, 1, 2, 
+        0, 1, 2, 
+        0, 1, 2),
+  y = c(6, 4, 2, 0.5, 
+        -1, -1, -1, 
+        -2, -2, -2, 
+        -3, -3, -3, 
+        -4.5, -4.5, -4.5),
+  height = c(2, 2, 2, 1, 
+             2, 2, 2, 
+             1, 1, 1, 
+             1, 1, 1, 
+             2, 2, 2),
+  width = c(3, 3, 3, 3, 
+            1, 1, 1, 
+            1, 1, 1, 
+            1, 1, 1, 
+            1, 1, 1)
+)
+
+# Add the expected threat values to the data frame
+zones$xT <- xT
+
+# Calculate midpoints for y-axis labels
+y_breaks <- c(6, 4, 2, 0.5, -1, -2.5, -4.5)
+y_labels <- c("Goal-20m", "20m-45m", "45m-65m", "65m-65m", 
+              "65m-45m", "45m-20m", "20m-Goal")
+
+# Plot the GAA pitch with zones and expected threat values
+ggplot(zones, aes(x = x, y = y, fill = xT)) +
+  geom_tile(color = "black", aes(width = width, height = height)) +
+  geom_text(aes(label = round(xT, 2)), color = "white", size = 4) +
+  scale_fill_viridis_c(name = "xT", option = "viridis") +
+  labs(title = "Expected Threat Values for each Zone on GAA Pitch",
+       x = "Zones",
+       y = "Pitch Sections") +
+  scale_x_continuous(breaks = c(0, 1, 2), labels = c("Left", "Middle", "Right")) +
+  scale_y_continuous(breaks = y_breaks, labels = y_labels) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),  # Switch off x-axis labels
+        panel.grid.major = element_blank(),  # Switch off major gridlines
+        panel.grid.minor = element_blank()) +  # Switch off minor gridlines
+  # Add arrow pointing downwards
+  geom_segment(aes(x = 3, y = 7, xend = 3, yend = -5), 
+               arrow = arrow(length = unit(0.3, "inches")), 
+               color = "black", size = 2) +
+  annotate("text", x = 3, y = 2, label = "Attack Direction", vjust = -1, angle = 90)
+
+
 # sum the expected threat scores for each team in each game
 expected_scores <- all_match_data %>%
   filter(team_attack != 'No Team') %>%
@@ -157,11 +214,132 @@ ggplot(scores_and_expected, aes(x = score, y = expected_threat_value)) +
        y = "Expected Threat Value") +
   theme_minimal() 
 
+xG_df <- as.data.frame(xG) %>%
+  mutate(zone = as.numeric(1:16))
+
+# Filter shots in all_match_data
+shots_data <- all_match_data %>% filter(action %in% c("Shot Point","Shot Goal"))
+
+# Join the xG values to the shots_data
+shots_with_xG <- shots_data %>%
+  left_join(xG_df, by = "zone")
+
+# Merge back the xG values to the all_match_data
+all_match_data <- all_match_data %>%
+  left_join(shots_with_xG %>% select(id, game_id, xG), by = c("game_id","id"))
+
+match1 <- all_match_data %>%
+  filter(game_id == 1)
+  
+match1 %>% group_by(team_attack) %>%
+  summarise(score = sum(score),
+            xG = sum(xG, na.rm = TRUE),
+            xT = sum(expected_value)) %>%
+  ungroup()
+  
+
+
+# Calculate xT (expected threat)
+match1 <- match1 %>%
+  group_by(possession_number) %>%
+  mutate(
+    previous_zone = lag(zone),
+    previous_expected_value = lag(expected_value),
+    xT = ifelse(!is.na(previous_zone) &
+                  (zone_change == 1) &
+                  (team_attack == lag(team_attack)) &
+                  (possession_number == lag(possession_number))
+                      ,expected_value - previous_expected_value, NA)
+  ) %>%
+  ungroup()
+
+par(new=TRUE)
+
+match1 %>% group_by(team_attack) %>%
+  summarise(score = sum(score),
+            xG = sum(xG, na.rm = TRUE),
+            xT = sum(xT, na.rm = TRUE)) %>%
+  ungroup()
+
+match_check <- match1 %>%
+  select(team_attack, previous_zone, zone, action, zone_change, team_change, 
+         previous_expected_value, expected_value, xT)
+
+match1 %>% group_by(team_attack) %>%
+  summarise(score = sum(score),
+            xG = sum(xG, na.rm = TRUE),
+            xT = sum(xT, na.rm = TRUE)) %>%
+  ungroup()
+
+zone_galway <- match1 %>% 
+  filter(team_attack_name == 'galway') %>%
+  group_by(team_attack_name, zone) %>%
+  summarise(xT = sum(xT, na.rm = TRUE)) %>%
+  ungroup() %>%
+  select(-team_attack_name)
+
+zone_kerry <- match1 %>% 
+  filter(team_attack_name == 'kerry') %>%
+  group_by(team_attack_name, zone) %>%
+  summarise(xT = sum(xT, na.rm = TRUE)) %>%
+  ungroup() %>%
+  select(-team_attack_name)
+
+zones_g <- zones %>%
+  select(-xT) %>%
+  left_join(zone_galway, by = c('Zone'='zone'))
+
+
+# Plot the GAA pitch with zones and expected threat values
+ggplot(zones_g, aes(x = x, y = y, fill = xT)) +
+  geom_tile(color = "black", aes(width = width, height = height)) +
+  geom_text(aes(label = round(xT, 2)), color = "white", size = 4) +
+  scale_fill_viridis_c(name = "xT", option = "viridis") +
+  labs(title = "Expected Threat Values for each Zone - Galway",
+       x = "Zones",
+       y = "Pitch Sections") +
+  scale_x_continuous(breaks = c(0, 1, 2), labels = c("Left", "Middle", "Right")) +
+  scale_y_continuous(breaks = y_breaks, labels = y_labels) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),  # Switch off x-axis labels
+        panel.grid.major = element_blank(),  # Switch off major gridlines
+        panel.grid.minor = element_blank()) +  # Switch off minor gridlines
+  # Add arrow pointing downwards
+  geom_segment(aes(x = 3, y = 7, xend = 3, yend = -5), 
+               arrow = arrow(length = unit(0.3, "inches")), 
+               color = "black", size = 2) +
+  annotate("text", x = 3, y = 2, label = "Attack Direction", vjust = -1, angle = 90)
 
 
 
+zones_k <- zones %>%
+  select(-xT) %>%
+  left_join(zone_kerry, by = c('Zone'='zone'))
 
 
+# Plot the GAA pitch with zones and expected threat values
+ggplot(zones_k, aes(x = x, y = y, fill = xT)) +
+  geom_tile(color = "black", aes(width = width, height = height)) +
+  geom_text(aes(label = round(xT, 2)), color = "white", size = 4) +
+  scale_fill_viridis_c(name = "xT", option = "viridis") +
+  labs(title = "Expected Threat Values for each Zone - Kerry",
+       x = "Zones",
+       y = "Pitch Sections") +
+  scale_x_continuous(breaks = c(0, 1, 2), labels = c("Left", "Middle", "Right")) +
+  scale_y_continuous(breaks = y_breaks, labels = y_labels) +
+  theme_minimal() +
+  theme(axis.title.y = element_blank(), 
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),  # Switch off x-axis labels
+        panel.grid.major = element_blank(),  # Switch off major gridlines
+        panel.grid.minor = element_blank()) +  # Switch off minor gridlines
+  # Add arrow pointing downwards
+  geom_segment(aes(x = 3, y = 7, xend = 3, yend = -5), 
+               arrow = arrow(length = unit(0.3, "inches")), 
+               color = "black", size = 2) +
+  annotate("text", x = 3, y = 2, label = "Attack Direction", vjust = -1, angle = 90)
 
 
 
