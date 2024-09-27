@@ -160,6 +160,19 @@ all_match_data <- all_match_data %>%
   ) %>%
   ungroup()
 
+# Adjust logic for turnovers after kickouts
+all_match_data <- all_match_data %>%
+  arrange(game_id, timestamp) %>%
+  group_by(game_id) %>%
+  mutate(
+    turnover_zone = case_when(
+      lag(action) == "Kickout Start" & action == "Kickout" & outcome == "TO" ~ lag(zone),  # Kickout TO -> Use kickout start zone (zone 1)
+      outcome == "TO" ~ lag(zone),  # Regular TO -> Use the last possession zone
+      TRUE ~ zone  # Default for non-turnover events
+    )
+  ) %>%
+  ungroup()
+
 
 # Filter out team changes and shots/TOs which are end and start of moves
 match_file_zone_prob <- all_match_data %>%

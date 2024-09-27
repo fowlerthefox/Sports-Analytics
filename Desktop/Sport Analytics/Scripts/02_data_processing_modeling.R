@@ -22,9 +22,9 @@ zone_actions <- all_match_data %>%
 
 # shots per zone
 zone_shots <- all_match_data %>%
-  group_by(zone) %>%
-  filter(action %in% c('Shot Point','Shot Goal')) %>%
-  summarise(shots = sum(if_else(action %in% c('Shot Point','Shot Goal'), 1, 0)))
+  group_by(previous_zone) %>%  # Use the previous zone, not the current one
+  filter(action %in% c('Shot Point', 'Shot Goal')) %>%
+  summarise(shots = sum(if_else(action %in% c('Shot Point', 'Shot Goal'), 1, 0)))
 
 # shots scored per zone
 zone_score <- all_match_data %>%
@@ -32,23 +32,23 @@ zone_score <- all_match_data %>%
   filter(outcome %in% c('Point','Goal')) %>%
   summarise(shot_score = sum(if_else(action %in% c('Shot Point','Shot Goal'), 1, 0)))
 
-# TOs per zone
+# TOs per last possession zone (use turnover_zone column)
 zone_TO <- all_match_data %>%
   filter(outcome == 'TO' & !action %in% c('Shot Point', 'Shot Goal')) %>%
-  group_by(zone) %>%
+  group_by(turnover_zone) %>%  # Use turnover_zone (last possession before TO)
   summarise(TO = sum(if_else(outcome == 'TO', 1, 0)))
 
-# join actions, shots, scores & TOs per zone
+# Join actions, shots, scores & TOs per zone
 zone_actions_shots_TO <- zone_actions %>%
-  left_join(zone_shots, by = c('zone')) %>%
-  left_join(zone_score, by = c('zone')) %>%
-  left_join(zone_TO, by = c('zone')) %>%
-  mutate(shots = coalesce(shots,0),
-         TO = coalesce(TO,0),
-         shot_score = coalesce(shot_score, 0),
-         Prob_shot = shots/actions,
-         Prob_TO = TO/actions,
-         Prob_score = coalesce(shot_score/shots, 0)
+  left_join(zone_shots, by = c('zone' = 'previous_zone')) %>%  # Join using previous_zone for shots
+  left_join(zone_score, by = c('zone')) %>%  # Join using previous_zone for scores
+  left_join(zone_TO, by = c('zone' = 'turnover_zone')) %>%     # Join using turnover_zone for TOs
+  mutate(shots = coalesce(shots, 0),     # Fill NA values with 0 for shots
+         TO = coalesce(TO, 0),           # Fill NA values with 0 for turnovers
+         shot_score = coalesce(shot_score, 0),  # Fill NA values with 0 for shot scores
+         Prob_shot = shots / actions,     # Probability of a shot
+         Prob_TO = TO / actions,          # Probability of a turnover
+         Prob_score = coalesce(shot_score / shots, 0)  # Probability of scoring from a shot
   )
 
 rm(zone_actions, zone_shots, zone_score, zone_TO)
